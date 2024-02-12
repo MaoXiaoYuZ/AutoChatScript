@@ -1,3 +1,4 @@
+import os
 import pyautogui
 import pyperclip
 import time
@@ -6,7 +7,11 @@ from PIL import Image
 import numpy as np
 
 import frog_eye
+import cursor
 import search_in_browser
+import windows_api
+
+
 
 
 def focus_chat_input():
@@ -35,6 +40,7 @@ def match_code_block(response):
 def resubmit(prompt):
     focus_chat_input()
     pyperclip.copy(prompt)
+    pyautogui.hotkey("ctrl", "a")
     pyautogui.hotkey("ctrl", "v")
     pyautogui.keyDown('shift')
 
@@ -53,29 +59,105 @@ def regenerate():
     pyautogui.press("enter")
 
 
+def wait_image(image, region=None, timeout=10):
+    t0 = time.time()
+    while True:
+        try:
+            left, top, right, bottom = region        
+            pos = pyautogui.locateCenterOnScreen(image, region=(left, top, right - left, bottom - top), confidence=0.9)
+        except Exception:
+            if time.time() - t0 > timeout:
+                pyautogui.alert(text='未能定位到图片！(Failed to locate the image!) ', title='程序终止(Program Abort)', button='OK')
+                return None
+            time.sleep(0.1)
+        else:
+            break
 
-time.sleep(1)
-last_response = copy_last_response()
+    return pos
 
-a = match_code_block(last_response)
+def locate_image(image):
+    try:
+        location = pyautogui.locateOnScreen(image, confidence=0.9)
+    except Exception:
+        pyautogui.alert(text='未能定位到图片！(Failed to locate the image!) ', title='程序终止(Program Abort)', button='OK')
+        return None
+    
+    return location.left, location.top, location.left + location.width, location.top + location.height
 
-last_response = "你的pattern有问题，没有匹配三引号，而是单引号，另外没有考虑到消息被截断的情况，也就是最后一个三引号对只有前面那个"
 
+retry_button_path = "detected_images/retry_button.png"
+submit_button_path = "detected_images/submit_button.png"
 
-def find_buttom():
+def location_retry_button():
+    last_response = copy_last_response()
     last_para = [e for e in last_response.split("\n") if e.strip()][-1]
     left_top_text = last_para[:5]
     right_bottom_text = last_response[-5:]
 
     left_top_rect = search_in_browser.locate_text(left_top_text)
     right_bottom_rect = search_in_browser.locate_text(right_bottom_text)
-    line_height = right_bottom_rect[:, 1].max() - left_top_rect[:, 1].max()
-
+    line_height = right_bottom_rect[:, 1].max() - right_bottom_rect[:, 1].min()
     next_line_left_top = (left_top_rect[:, 0].min(axis=0), right_bottom_rect[:, 1].max())
-    first_char_center = next_line_left_top + line_height // 2
 
-    pyautogui.moveTo(first_char_center[0], first_char_center[1])
+    button_right_bottom = next_line_left_top[0] + line_height * 10, next_line_left_top[1] + line_height * 2
 
+    button_boundary_list = cursor.detect_button_boundary(
+        next_line_left_top, 
+        button_right_bottom, 
+        step=line_height // 2, 
+        sub_step=line_height // 8, 
+        only_first=True)
+    
+    if len(button_boundary_list) == 1:
+        left, top, right, bottom = button_boundary_list[0]
+        image = pyautogui.screenshot(retry_button_path, region=(left, top, right - left, bottom - top))
+    else:
+        pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the retry button!) ', title='程序终止(Program Abort)', button='OK')
+
+    return button_boundary_list[0], image
+
+def location_submit_button():
+    focus_chat_input()
+    pyperclip.copy("Message ChatGPT")
+    pyautogui.hotkey("ctrl", "a")
+    pyautogui.hotkey("ctrl", "v")
+
+    text_rect = search_in_browser.locate_text("Message ChatGPT")
+    line_height = int(text_rect[:, 1].max() - text_rect[:, 1].min())
+
+    button_left_top = int(text_rect[:, 0].max()), int(text_rect[:, 1].min())
+    #button_right_bottom = windows_api.get_mouse_window_rect()[2] - line_height // 4, int(text_rect[:, 1].max())
+    button_right_bottom = windows_api.get_mouse_window_rect()[2:]
+
+    button_boundary_list = cursor.detect_button_boundary(
+        button_left_top, 
+        button_right_bottom, 
+        step=line_height // 2, 
+        sub_step=line_height // 8, 
+        only_first=True)
+    
+    if len(button_boundary_list) == 1:
+        left, top, right, bottom = button_boundary_list[0]
+        image = pyautogui.screenshot(submit_button_path, region=(left, top, right - left, bottom - top))
+    else:
+        pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the submit button!) ', title='程序终止(Program Abort)', button='OK')
+
+    return button_boundary_list[0], image
+
+if os.path.exists(submit_button_path):
+    submit_button_image = Image.open(submit_button_path)
+    submit_button_region = locate_image(submit_button_image)
+else:
+    submit_button_region, submit_button_image = location_submit_button()
+    
+
+if os.path.exists(retry_button_path):
+    retry_button_image = Image.open(retry_button_path)
+    retry_button_region = locate_image(retry_button_image)
+else:
+    retry_button_region, retry_button_image = location_retry_button()
+
+exit(0)
 
 # 加载图片
 submit_button_png = Image.open('submit_button.png')

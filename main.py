@@ -1,65 +1,244 @@
+import functools
+import os
 import pyautogui
 import pyperclip
 import time
+import re
 from PIL import Image
+import numpy as np
 
 import frog_eye
+import cursor
 import search_in_browser
+import windows_api
 
 
-#keyword = input("请输入您要搜索的关键词: ")
-keyword = "请在一个三引号"
-time.sleep(2)
-img_before = pyautogui.screenshot()
-search_in_browser.search(keyword)
-img_after = pyautogui.screenshot()
-rect = frog_eye.find_optimal_highlight_rect(img_before, img_after)
-line_height = rect[:, 1].max() - rect[:, 1].min()
-line_left_top = rect.min(axis=0)
-next_line_left_top = (line_left_top[0], line_left_top[1] + line_height)
-pyautogui.moveTo(next_line_left_top[0], next_line_left_top[1])
-exit(0)
 
-
-# 加载图片
-submit_button_png = Image.open('submit_button.png')
-input_box_png = Image.open('input_box.png')
-copy_retry_feedback_png = Image.open('copy_retry_feedback.png')
-
-# 定位输入框和提交按钮的位置
-submit_button_pos = pyautogui.locateCenterOnScreen(submit_button_png, confidence=0.9)
-input_box_pos = pyautogui.locateCenterOnScreen(input_box_png, confidence=0.9)
-
-# 获取用户输入的内容
-while user_input := input("请输入您的内容: "):
-    # 将光标移动到输入框并点击，准备输入内容
-    pyautogui.click(*input_box_pos)
-    pyperclip.copy(user_input)
-    pyautogui.hotkey('ctrl', 'v')
-
-    # 移动到提交按钮并点击
-    pyautogui.click(*submit_button_pos)
-
-    # 定位复制/重试/反馈按钮的位置
-    region = (input_box_pos[0]-100, input_box_pos[1]-300, submit_button_pos[0], submit_button_pos[1])
-    while True:
+def focus_window(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # 假设第一个参数是调用该方法的类实例
+        self = args[0]
+        cursor_pos = pyautogui.position()
+        flag = False
+        if not self._on_focus:
+            pyautogui.click(self.window_rect[0] + 10, self.window_rect[1] + 10)
+            self._on_focus = True
+            flag = True
         try:
-            copy_retry_feedback_pos = pyautogui.locateCenterOnScreen(copy_retry_feedback_png, region=region, confidence=0.9)
-        except Exception:
-            time.sleep(0.1)
-        else:
-            break
-
-    # 如果找到了复制/重试/反馈按钮，定位复制按钮并点击
-    if copy_retry_feedback_pos:
-        copy_pos = copy_retry_feedback_pos[0]-40, copy_retry_feedback_pos[1]
-        pyautogui.click(*copy_pos)
-
-        # 假设响应已复制到剪贴板，您可以使用其他库如pyperclip来获取剪贴板内容
-        try:
-            response = pyperclip.paste()
-            print("响应内容：", response)
+            return func(*args, **kwargs)
         except Exception as e:
-            print("获取剪贴板内容失败：", e)
-    else:
-        print("未能定位到复制/重试/反馈按钮的位置。")
+            raise e
+        finally:
+            if flag:
+                pyautogui.moveTo(cursor_pos)
+                self._on_focus = False
+            
+    return wrapper
+
+
+class ChatGPT_Auto_Script:
+    def __init__(self):
+        self.retry_button_path = "detected_images/retry_button.png"
+        self.submit_button_path = "detected_images/submit_button.png"
+        self._on_focus = False
+    
+    def init(self):
+        # 执行这段代码前要保证鼠标焦点在chatgpt网页上
+        cursor_pos = pyautogui.position()
+
+        self.window_rect = windows_api.get_mouse_window_rect()
+
+        if os.path.exists(self.submit_button_path):
+            self.submit_button_image = Image.open(self.submit_button_path)
+            self.submit_button_region = self.locate_image(self.submit_button_image, confidence=0.9)
+        else:
+            self.submit_button_region, self.submit_button_image = self.locate_submit_button()
+            
+        if os.path.exists(self.retry_button_path):
+            self.retry_button_image = Image.open(self.retry_button_path)
+        else:
+            _, self.retry_button_image = self.locate_retry_button()
+        
+        pyautogui.moveTo(cursor_pos)
+    
+    def screenshot(self):
+        return pyautogui.screenshot(region=self.window_rect)
+    
+    @focus_window
+    def _focus_chat_input(self):
+        pyautogui.hotkey("shift", "esc")
+
+    @focus_window
+    def new_chat(self):
+        pyautogui.hotkey("ctrl", "shift", "o")
+
+    def wait_last_response(self):
+        wait_start = self.wait_stationary(delay=1, timeout=10, reverse=True)
+        if wait_start:
+            wait_finish = self.wait_stationary(delay=1, timeout=10, reverse=False)
+        else:
+            pyautogui.alert(text='ChatGPT未能返回响应！(ChatGPT failed to return a response!) ', title='程序终止(Program Abort)', button='OK')
+        
+        return self.copy_last_response()
+    
+    @focus_window
+    def copy_last_response(self):
+        pyautogui.hotkey("ctrl", "shift", "c")
+        return pyperclip.paste()
+
+    @focus_window
+    def submit(self, prompt):
+        self._focus_chat_input()
+        pyperclip.copy(prompt)
+        pyautogui.hotkey("ctrl", "a", "v")
+
+        pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
+        if pos is None:
+            self.submit_button_region, self.submit_button_image = self.locate_submit_button()
+            return
+        else:
+            pyautogui.click(pos)
+
+    def match_code_block(self, response):
+        pattern = r"(?<=[\r\n])```.*?```(?=[\r\n])"
+        matches = re.findall(pattern, '\n' + response + '```\n', re.DOTALL)
+        return matches
+
+    @focus_window
+    def resubmit(self, prompt):
+        self._focus_chat_input()
+        pyperclip.copy(prompt)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.hotkey("ctrl", "v")
+        pyautogui.keyDown('shift')
+
+        pyautogui.press("tab")  # Bad response
+        pyautogui.press("tab")  # Regenerate
+        pyautogui.press("tab")  # Copy
+
+        matches = self.match_code_block(self.copy_last_response())
+
+        pyautogui.keyUp('shift')
+        #pyautogui.press("enter")
+
+    @focus_window
+    def regenerate(self):
+        self._focus_chat_input()
+        pyautogui.hotkey("shift", "tab", "tab")
+        pyautogui.press("enter")
+
+    def wait_image(self, image, region=None, confidence=1, timeout=10):
+        t0 = time.time()
+        while True:
+            try:
+                if region is not None:
+                    left, top, right, bottom = region        
+                    region = (left, top, right - left, bottom - top)
+                pos = pyautogui.locateCenterOnScreen(image, region=region, confidence=confidence)
+                return pos
+            except Exception:
+                if time.time() - t0 > timeout:
+                    return None
+                time.sleep(0.1)
+    
+    def wait_stationary(self, delay=2, timeout=10, reverse=False):
+        t0 = time.time()
+        img_before = self.screenshot()
+        cur_delay = delay
+        while True:
+            time.sleep(0.5)
+            img_after = self.screenshot()
+            is_stationary = frog_eye.is_stationary(img_before, img_after)
+            if not is_stationary if reverse else is_stationary:
+                cur_delay -= 0.5
+                if cur_delay <= 0:
+                    return True
+            else:
+                cur_delay = delay
+            if time.time() - t0 > timeout:
+                return False        
+            img_before = img_after
+
+    def locate_image(self, image, region=None, confidence=1):
+        try:
+            location = pyautogui.locateOnScreen(image, region=region, confidence=confidence)
+        except Exception:
+            return None
+        
+        return location.left, location.top, location.left + location.width, location.top + location.height
+
+    @focus_window
+    def locate_retry_button(self):
+        last_response = self.copy_last_response()
+        last_para = [e for e in last_response.split("\n") if e.strip()][-1]
+        left_top_text = last_para[:5]
+        right_bottom_text = last_response[-5:]
+
+        left_top_rect = search_in_browser.locate_text(left_top_text)
+        right_bottom_rect = search_in_browser.locate_text(right_bottom_text)
+        line_height = right_bottom_rect[:, 1].max() - right_bottom_rect[:, 1].min()
+        next_line_left_top = (left_top_rect[:, 0].min(axis=0), right_bottom_rect[:, 1].max())
+
+        button_right_bottom = next_line_left_top[0] + line_height * 10, next_line_left_top[1] + line_height * 2
+
+        button_boundary_list = cursor.detect_button_boundary(
+            next_line_left_top, 
+            button_right_bottom, 
+            step=line_height // 2, 
+            sub_step=line_height // 8, 
+            only_first=True)
+        
+        if len(button_boundary_list) == 1:
+            left, top, right, bottom = button_boundary_list[0]
+            image = pyautogui.screenshot(self.retry_button_path, region=(left, top, right - left, bottom - top))
+        else:
+            pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the retry button!) ', title='程序终止(Program Abort)', button='OK')
+
+        return button_boundary_list[0], image
+
+    @focus_window    
+    def locate_submit_button(self):
+        self._focus_chat_input()
+        pyperclip.copy("Message ChatGPT")
+        pyautogui.hotkey("ctrl", "a", "v")
+
+        text_rect = search_in_browser.locate_text("Message ChatGPT")
+        line_height = int(text_rect[:, 1].max() - text_rect[:, 1].min())
+
+        button_left_top = int(text_rect[:, 0].max()), int(text_rect[:, 1].min())
+        #button_right_bottom = windows_api.get_mouse_window_rect()[2] - line_height // 4, int(text_rect[:, 1].max())
+        button_right_bottom = self.window_rect[2:]
+
+        button_boundary_list = cursor.detect_button_boundary(
+            button_left_top, 
+            button_right_bottom, 
+            step=line_height // 2, 
+            sub_step=line_height // 8, 
+            only_first=True)
+        
+        if len(button_boundary_list) == 1:
+            left, top, right, bottom = button_boundary_list[0]
+            image = pyautogui.screenshot(self.submit_button_path, region=(left, top, right - left, bottom - top))
+        else:
+            pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the submit button!) ', title='程序终止(Program Abort)', button='OK')
+
+        return button_boundary_list[0], image
+    
+    def demo(self):
+        print("请在三秒后将鼠标移动到chatgpt网页上...")
+        # print("3...")
+        # time.sleep(1)
+        # print("2...")
+        # time.sleep(1)
+        print("1...")
+        time.sleep(1)
+        print("开始初始化...")
+        self.init()
+        while prompt := input("User: "):
+            self.submit(prompt)
+            print("ChatGPT:", self.wait_last_response())
+
+chatgpt = ChatGPT_Auto_Script()
+chatgpt.demo()
+

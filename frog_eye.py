@@ -3,6 +3,25 @@ import pyautogui
 
 import numpy as np
 
+def is_stationary(frame1, frame2, threshold=30):
+    frame1, frame2 = np.asarray(frame1), np.asarray(frame2)
+
+    # 将图片转换为灰度图，以简化计算
+    gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+    # 计算两帧的差异
+    diff = cv2.absdiff(gray1, gray2)
+
+    # 应用阈值来标识区域的变动
+    _, thresh = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)
+
+    # 计算阈值图像中的非零像素点数量，以此判断变动
+    non_zero_count = np.count_nonzero(thresh)
+
+    return non_zero_count == 0
+
+
 def find_contours(img_before, img_after, thresh=30):
     img_before, img_after = np.asarray(img_before), np.asarray(img_after)
     
@@ -58,7 +77,7 @@ def find_optimal_highlight_rect(img_before, img_after, width_height_ratio=None, 
         if not (width >= 5 and 400 >= height >= 5):
             continue
 
-        if cv2.contourArea(contour) == 0 or width * height / cv2.contourArea(contour) > 1.01:
+        if cv2.contourArea(contour) == 0 or width * height / cv2.contourArea(contour) > 1.1:
             continue
 
         valid_rects.append(rect)
