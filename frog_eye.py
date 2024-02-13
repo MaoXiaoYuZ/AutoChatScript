@@ -3,7 +3,7 @@ import pyautogui
 
 import numpy as np
 
-def is_stationary(frame1, frame2, threshold=30):
+def is_stationary(frame1, frame2, threshold=30, change_ratio_threshold=0.01):
     frame1, frame2 = np.asarray(frame1), np.asarray(frame2)
 
     # 将图片转换为灰度图，以简化计算
@@ -16,10 +16,16 @@ def is_stationary(frame1, frame2, threshold=30):
     # 应用阈值来标识区域的变动
     _, thresh = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)
 
-    # 计算阈值图像中的非零像素点数量，以此判断变动
     non_zero_count = np.count_nonzero(thresh)
 
-    return non_zero_count == 0
+    # 计算阈值图像中的非零像素点数量，以此判断变动
+    total_pixels = frame1.shape[0] * frame1.shape[1]
+
+    change_ratio = non_zero_count / total_pixels
+
+    #print("change_ratio", change_ratio)
+
+    return change_ratio < change_ratio_threshold
 
 
 def find_contours(img_before, img_after, thresh=30):

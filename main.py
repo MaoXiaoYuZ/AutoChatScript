@@ -43,35 +43,58 @@ class ChatGPT_Auto_Script:
         self.resubmit_button_path = "detected_images/resubmit_button.png"
         self._on_focus = False
 
-    
+    def init_window_rect(self):
+        self.window_rect = windows_api.get_mouse_window_rect()
+
     def init(self):
         # 执行这段代码前要保证鼠标焦点在chatgpt网页上
         cursor_pos = pyautogui.position()
 
-        self.scroll_to_bottom()
+        self.init_window_rect()
 
-        self.window_rect = windows_api.get_mouse_window_rect()
+        self.scroll_to_bottom()
 
         if os.path.exists(self.submit_button_path):
             self.submit_button_image = Image.open(self.submit_button_path)
-            self.submit_button_region = self.locate_image(self.submit_button_image, confidence=0.9)
+            if (region := self.locate_image(self.submit_button_image, confidence=0.9)):
+                self.submit_button_region = self.pad_image_region(region)
+            else:
+                self.submit_button_region, self.submit_button_image = self.locate_submit_button()
         else:
             self.submit_button_region, self.submit_button_image = self.locate_submit_button()
 
-        if os.path.exists(self.retry_button_path):
-            self.retry_button_image = Image.open(self.retry_button_path)
-        else:
-            _, self.retry_button_image = self.locate_retry_button()
+        self.new_chat()
+
+        prompt = "Translate to Chinese: This is a test."
+        print("User:", prompt)
+        response = self.submit(prompt)
+        print("ChatGPT:", response)
+
+        # if os.path.exists(self.retry_button_path):
+        #     self.retry_button_image = Image.open(self.retry_button_path)
+        # else:
+        #     _, self.retry_button_image = self.locate_retry_button()
         
         if os.path.exists(self.resubmit_button_path):
             self.resubmit_button_image = Image.open(self.resubmit_button_path)
         else:
             _, self.resubmit_button_image = self.locate_resubmit_button()
 
+        prompt = "Translate to Chinese: This is the second test."
+        print("User:", prompt)
+        response = self.resubmit(prompt)
+        print("ChatGPT:", response)
+
+        print("初始化完成！")
+
         pyautogui.moveTo(cursor_pos)
     
     def screenshot(self):
-        return pyautogui.screenshot(region=self.window_rect)
+        left, top, right, bottom = self.window_rect        
+        region = (left, top, right - left, bottom - top)
+        region = self.pad_image_region(region, pad=-50)
+        #return pyautogui.screenshot(f"{time.time()}.png", region=region)
+        return pyautogui.screenshot(region=region)
     
     @focus_window
     def _focus_chat_input(self):
@@ -83,10 +106,7 @@ class ChatGPT_Auto_Script:
 
     def _wait_last_response(self):
         wait_start = self.wait_stationary(delay=1, timeout=10, reverse=True)
-        if wait_start:
-            wait_finish = self.wait_stationary(delay=1, timeout=10, reverse=False)
-        else:
-            raise Exception("ChatGPT未能返回响应！(ChatGPT failed to return a response!)")
+        wait_finish = self.wait_stationary(delay=1, timeout=10, reverse=False)
 
         return self.copy_last_response()
     
@@ -103,7 +123,8 @@ class ChatGPT_Auto_Script:
 
         pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
         if pos is None:
-            self.submit_button_region, self.submit_button_image = self.locate_submit_button()
+            #self.submit_button_region, self.submit_button_image = self.locate_submit_button()
+            raise Exception("未能定位到submit按钮！(Failed to locate the submit button!)")
             return
         else:
             pyautogui.click(pos)
@@ -120,8 +141,8 @@ class ChatGPT_Auto_Script:
         matches = re.findall(pattern, '\n' + response + '```\n', re.DOTALL)
         return matches
     
-    def scroll_to_bottom(self):
-        pyautogui.scroll(-1000)
+    def scroll_to_bottom(self, clicks=-1000):
+        pyautogui.scroll(clicks)
 
     @focus_window
     def resubmit(self, prompt):
@@ -195,7 +216,11 @@ class ChatGPT_Auto_Script:
         
         return location.left, location.top, location.left + location.width, location.top + location.height
 
-    def manual_locate_image(self, image_file):
+    def pad_image_region(self, region, pad = 50):
+        left, top, right, bottom = region
+        return (left - pad, top - pad, right + pad, bottom + pad)
+
+    def manual_locate_image_region(self, image_file):
         while not input("移动鼠标，悬停到按钮上后，按下回车键"):
             if cursor.get_cursor_state() != 'HAND':
                 print("请将鼠标移动到按钮上！")
@@ -204,7 +229,7 @@ class ChatGPT_Auto_Script:
                 ((left, top), (right, bottom)) = cursor.detect_cur_button_boundary(cursor_pos, cursor_pos - 200, cursor_pos + 200, step=5)
                 image = pyautogui.screenshot(image_file, region=(left, top, right - left, bottom - top))
                 pyautogui.moveTo(cursor_pos[0], cursor_pos[1])
-                return (left, top, right, bottom), image
+                return self.pad_image_region((left, top, right, bottom)), image
 
     @focus_window
     def locate_retry_button(self):
@@ -232,7 +257,7 @@ class ChatGPT_Auto_Script:
         else:
             assert False, "未能定位到重试按钮！(Failed to locate the retry button!)"
 
-        return button_boundary_list[0], image
+        return self.pad_image_region(button_boundary_list[0]), image
     
     @focus_window
     def estimate_resubmit_button_reigon(self):
@@ -244,8 +269,18 @@ class ChatGPT_Auto_Script:
         left_top_rect = text_rects[0]
         
         button_left_top = left_top_rect.min(axis=0) + np.array([-line_height, -line_height * 5])
-
         button_right_bottom = left_top_rect.max(axis=0)
+
+        # if button_left_top is on the top of the window, scroll to the bottom
+        if (button_left_top[1] - self.window_rect[1]) / (self.window_rect[3] - self.window_rect[1]) < 0.25:
+            pyautogui.moveTo(*left_top_rect.mean(axis=0))
+            self.scroll_to_bottom(clicks=(self.window_rect[3] - self.window_rect[1]) // 4)
+            
+            text_rects, line_height = search_in_browser.locate_text(left_top_text)
+            left_top_rect = text_rects[0]
+            
+            button_left_top = left_top_rect.min(axis=0) + np.array([-line_height, -line_height * 5])
+            button_right_bottom = left_top_rect.max(axis=0)
 
         return button_left_top, button_right_bottom, line_height
 
@@ -267,7 +302,7 @@ class ChatGPT_Auto_Script:
         else:
             assert False, "未能定位到resubmit按钮！(Failed to locate the resubmit button!)"
 
-        return button_boundary_list[0], image
+        return self.pad_image_region(button_boundary_list[0]), image
 
     @focus_window    
     def locate_submit_button(self):
@@ -296,7 +331,7 @@ class ChatGPT_Auto_Script:
         else:
             assert False, "未能定位到submit按钮！(Failed to locate the submit button!)"
 
-        return button_boundary_list[0], image
+        return self.pad_image_region(button_boundary_list[0]), image
     
     def demo(self):
         print("请在三秒后将鼠标移动到chatgpt网页上...")
@@ -308,18 +343,21 @@ class ChatGPT_Auto_Script:
         time.sleep(1)
         print("开始初始化...")
         self.init()
-        while prompt := input("User: "):
-            self.submit(prompt)
-            print("ChatGPT:", self.wait_last_response())
+        print("初始化完成！")
+        while prompt := input("User(q to quit, r to resubmit): "):
+            if prompt == 'q':
+                break
+            elif prompt == 'r':
+                prompt = input("\t resubmit:")
+                self.resubmit(prompt)
+            elif len(prompt) == 0:
+                print("输入不能为空（Input cannot be empty）！")
+            else:
+                response = self.submit(prompt)
+                print("ChatGPT:", response)
 
 #remove all file in detected_images
 # for file in os.listdir("detected_images"):
 #     os.remove(os.path.join("detected_images", file))
 chatgpt = ChatGPT_Auto_Script()
-# time.sleep(1)
-# chatgpt.init()
-# #chatgpt.new_chat()
-# chatgpt.resubmit("翻译为一个英文函数名：手动定位图片")
-
-while True:
-    chatgpt.manual_locate_image('test.png')
+chatgpt.init()
