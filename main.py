@@ -13,7 +13,6 @@ import search_in_browser
 import windows_api
 
 
-
 def focus_window(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -41,11 +40,15 @@ class ChatGPT_Auto_Script:
     def __init__(self):
         self.retry_button_path = "detected_images/retry_button.png"
         self.submit_button_path = "detected_images/submit_button.png"
+        self.resubmit_button_path = "detected_images/resubmit_button.png"
         self._on_focus = False
+
     
     def init(self):
         # 执行这段代码前要保证鼠标焦点在chatgpt网页上
         cursor_pos = pyautogui.position()
+
+        self.scroll_to_bottom()
 
         self.window_rect = windows_api.get_mouse_window_rect()
 
@@ -54,12 +57,17 @@ class ChatGPT_Auto_Script:
             self.submit_button_region = self.locate_image(self.submit_button_image, confidence=0.9)
         else:
             self.submit_button_region, self.submit_button_image = self.locate_submit_button()
-            
+
         if os.path.exists(self.retry_button_path):
             self.retry_button_image = Image.open(self.retry_button_path)
         else:
             _, self.retry_button_image = self.locate_retry_button()
         
+        if os.path.exists(self.resubmit_button_path):
+            self.resubmit_button_image = Image.open(self.resubmit_button_path)
+        else:
+            _, self.resubmit_button_image = self.locate_resubmit_button()
+
         pyautogui.moveTo(cursor_pos)
     
     def screenshot(self):
@@ -73,13 +81,13 @@ class ChatGPT_Auto_Script:
     def new_chat(self):
         pyautogui.hotkey("ctrl", "shift", "o")
 
-    def wait_last_response(self):
+    def _wait_last_response(self):
         wait_start = self.wait_stationary(delay=1, timeout=10, reverse=True)
         if wait_start:
             wait_finish = self.wait_stationary(delay=1, timeout=10, reverse=False)
         else:
-            pyautogui.alert(text='ChatGPT未能返回响应！(ChatGPT failed to return a response!) ', title='程序终止(Program Abort)', button='OK')
-        
+            raise Exception("ChatGPT未能返回响应！(ChatGPT failed to return a response!)")
+
         return self.copy_last_response()
     
     @focus_window
@@ -99,28 +107,49 @@ class ChatGPT_Auto_Script:
             return
         else:
             pyautogui.click(pos)
+        
+        try:
+            response = self._wait_last_response()
+        except Exception as e:
+            print(e)
+        
+        return response
 
     def match_code_block(self, response):
         pattern = r"(?<=[\r\n])```.*?```(?=[\r\n])"
         matches = re.findall(pattern, '\n' + response + '```\n', re.DOTALL)
         return matches
+    
+    def scroll_to_bottom(self):
+        pyautogui.scroll(-1000)
 
     @focus_window
     def resubmit(self, prompt):
-        self._focus_chat_input()
+        assert len(self.chat_messages) >= 2
+
+        button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon()
+
+        pyautogui.moveTo(button_left_top[0], button_left_top[1])
+
+        pos = self.wait_image(self.resubmit_button_image, region=(*button_left_top, *button_right_bottom), confidence=0.9, timeout=0)
+        
+        if pos is None:
+            #self.resubmit_button_region, self.resubmit_button_image = self.locate_resubmit_button()
+            raise Exception("未能定位到resubmit按钮！(Failed to locate the resubmit button!)")
+            return
+        else:
+            pyautogui.click(pos)
+        
         pyperclip.copy(prompt)
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.hotkey("ctrl", "v")
-        pyautogui.keyDown('shift')
+        pyautogui.hotkey("ctrl", "a", "v")
+        pyautogui.hotkey("tab", "enter")
 
-        pyautogui.press("tab")  # Bad response
-        pyautogui.press("tab")  # Regenerate
-        pyautogui.press("tab")  # Copy
-
-        matches = self.match_code_block(self.copy_last_response())
-
-        pyautogui.keyUp('shift')
-        #pyautogui.press("enter")
+        try:
+            response = self._wait_last_response()
+        except Exception as e:
+            print(e)
+        
+        return response
 
     @focus_window
     def regenerate(self):
@@ -196,14 +225,51 @@ class ChatGPT_Auto_Script:
             pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the retry button!) ', title='程序终止(Program Abort)', button='OK')
 
         return button_boundary_list[0], image
+    
+    @focus_window
+    def estimate_resubmit_button_reigon(self):
+        last_response = self.copy_last_response()
+        left_top_text = last_response[:10]
+
+        left_top_text = left_top_text.replace('`', '')
+
+        left_top_rect = search_in_browser.locate_text(left_top_text)
+        line_height = left_top_rect[:, 1].max() - left_top_rect[:, 1].min()
+        
+        button_left_top = left_top_rect.min(axis=0) + np.array([-line_height, -line_height * 5])
+
+        button_right_bottom = left_top_rect.max(axis=0)
+
+        return button_left_top, button_right_bottom, line_height
+
+    @focus_window
+    def locate_resubmit_button(self):
+        button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon()
+
+        button_boundary_list = cursor.detect_button_boundary(
+            button_left_top, 
+            button_right_bottom, 
+            step=line_height // 2, 
+            sub_step=line_height // 8, 
+            only_first=True)
+        
+        if len(button_boundary_list) == 1:
+            left, top, right, bottom = button_boundary_list[0]
+            pyautogui.moveTo(left, top - line_height)
+            image = pyautogui.screenshot(self.resubmit_button_path, region=(left, top, right - left, bottom - top))
+        else:
+            pyautogui.alert(text='未能定位到resubmit按钮！(Failed to locate the retry button!) ', title='程序终止(Program Abort)', button='OK')
+
+        return button_boundary_list[0], image
 
     @focus_window    
     def locate_submit_button(self):
         self._focus_chat_input()
-        pyperclip.copy("Message ChatGPT")
+        
+        pyperclip.copy("u_hZ26nN:JC.3Dj")
         pyautogui.hotkey("ctrl", "a", "v")
 
-        text_rect = search_in_browser.locate_text("Message ChatGPT")
+        text_rect = search_in_browser.locate_text("u_hZ26nN:JC.3Dj")
         line_height = int(text_rect[:, 1].max() - text_rect[:, 1].min())
 
         button_left_top = int(text_rect[:, 0].max()), int(text_rect[:, 1].min())
@@ -239,6 +305,12 @@ class ChatGPT_Auto_Script:
             self.submit(prompt)
             print("ChatGPT:", self.wait_last_response())
 
+#remove all file in detected_images
+# for file in os.listdir("detected_images"):
+#     os.remove(os.path.join("detected_images", file))
 chatgpt = ChatGPT_Auto_Script()
-chatgpt.demo()
+time.sleep(1)
+chatgpt.init()
+chatgpt.scroll_to_bottom()
+chatgpt.submit('hello')
 
