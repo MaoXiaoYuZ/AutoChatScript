@@ -125,8 +125,6 @@ class ChatGPT_Auto_Script:
 
     @focus_window
     def resubmit(self, prompt):
-        assert len(self.chat_messages) >= 2
-
         button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon()
 
         pyautogui.moveTo(button_left_top[0], button_left_top[1])
@@ -197,6 +195,17 @@ class ChatGPT_Auto_Script:
         
         return location.left, location.top, location.left + location.width, location.top + location.height
 
+    def manual_locate_image(self, image_file):
+        while not input("移动鼠标，悬停到按钮上后，按下回车键"):
+            if cursor.get_cursor_state() != 'HAND':
+                print("请将鼠标移动到按钮上！")
+            else:
+                cursor_pos = np.asarray(pyautogui.position())
+                ((left, top), (right, bottom)) = cursor.detect_cur_button_boundary(cursor_pos, cursor_pos - 200, cursor_pos + 200, step=5)
+                image = pyautogui.screenshot(image_file, region=(left, top, right - left, bottom - top))
+                pyautogui.moveTo(cursor_pos[0], cursor_pos[1])
+                return (left, top, right, bottom), image
+
     @focus_window
     def locate_retry_button(self):
         last_response = self.copy_last_response()
@@ -221,7 +230,7 @@ class ChatGPT_Auto_Script:
             left, top, right, bottom = button_boundary_list[0]
             image = pyautogui.screenshot(self.retry_button_path, region=(left, top, right - left, bottom - top))
         else:
-            pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the retry button!) ', title='程序终止(Program Abort)', button='OK')
+            assert False, "未能定位到重试按钮！(Failed to locate the retry button!)"
 
         return button_boundary_list[0], image
     
@@ -256,7 +265,7 @@ class ChatGPT_Auto_Script:
             pyautogui.moveTo(left, top - line_height)
             image = pyautogui.screenshot(self.resubmit_button_path, region=(left, top, right - left, bottom - top))
         else:
-            pyautogui.alert(text='未能定位到resubmit按钮！(Failed to locate the retry button!) ', title='程序终止(Program Abort)', button='OK')
+            assert False, "未能定位到resubmit按钮！(Failed to locate the resubmit button!)"
 
         return button_boundary_list[0], image
 
@@ -285,7 +294,7 @@ class ChatGPT_Auto_Script:
             left, top, right, bottom = button_boundary_list[0]
             image = pyautogui.screenshot(self.submit_button_path, region=(left, top, right - left, bottom - top))
         else:
-            pyautogui.alert(text='未能定位到重试按钮！(Failed to locate the submit button!) ', title='程序终止(Program Abort)', button='OK')
+            assert False, "未能定位到submit按钮！(Failed to locate the submit button!)"
 
         return button_boundary_list[0], image
     
@@ -307,7 +316,10 @@ class ChatGPT_Auto_Script:
 # for file in os.listdir("detected_images"):
 #     os.remove(os.path.join("detected_images", file))
 chatgpt = ChatGPT_Auto_Script()
-time.sleep(1)
-chatgpt.init()
-chatgpt.scroll_to_bottom()
+# time.sleep(1)
+# chatgpt.init()
+# #chatgpt.new_chat()
+# chatgpt.resubmit("翻译为一个英文函数名：手动定位图片")
 
+while True:
+    chatgpt.manual_locate_image('test.png')

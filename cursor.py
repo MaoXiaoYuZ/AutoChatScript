@@ -52,7 +52,8 @@ def get_cursor_state():
         return None
 
 
-def _detect_button_boundary(start_pos, left_top, right_bottom, step=20):
+@modify_pyautogui_settings
+def detect_cur_button_boundary(start_pos, left_top, right_bottom, step=20):
     directions = ['left', 'right', 'up', 'down']
     bounds = {}
 
@@ -66,8 +67,11 @@ def _detect_button_boundary(start_pos, left_top, right_bottom, step=20):
 
     cursor_pos = pyautogui.position()
 
+    start_pos = (int(start_pos[0]), int(start_pos[1]))
+
     for direction in directions:
         x, y = start_pos
+        flag = True
         while True:
             if direction == 'left':
                 x -= step
@@ -86,7 +90,11 @@ def _detect_button_boundary(start_pos, left_top, right_bottom, step=20):
                 break
 
             if pyautogui.position() == cursor_pos:
-                pyautogui.moveTo(x, y)
+                if flag:    # 给浏览器一点时间检测鼠标悬停
+                    pyautogui.moveTo(x, y, duration=0.2)
+                    flag = False
+                else:
+                    pyautogui.moveTo(x, y)
                 cursor_pos = (x, y)
             else:
                 pyautogui.alert(text='检测到人为鼠标移动！(Detected artificial mouse movement!) ', title='程序终止(Program Abort)', button='OK')
@@ -122,7 +130,7 @@ def detect_button_boundary(left_top, right_bottom, step=20, sub_step=5, only_fir
             pyautogui.moveTo(x, y)
 
             if get_cursor_state() == "HAND":
-                rect_start, rect_end = _detect_button_boundary((x, y), left_top, right_bottom, step=sub_step)
+                rect_start, rect_end = detect_cur_button_boundary((x, y), left_top, right_bottom, step=sub_step)
                 boundary = (*rect_start, *rect_end)
                 if only_first:
                     return [boundary, ]
