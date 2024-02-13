@@ -201,12 +201,11 @@ class ChatGPT_Auto_Script:
     def locate_retry_button(self):
         last_response = self.copy_last_response()
         last_para = [e for e in last_response.split("\n") if e.strip()][-1]
-        left_top_text = last_para[:5]
-        right_bottom_text = last_response[-5:]
+        last_para = last_para.replace('`', '')
 
-        left_top_rect = search_in_browser.locate_text(left_top_text)
-        right_bottom_rect = search_in_browser.locate_text(right_bottom_text)
-        line_height = right_bottom_rect[:, 1].max() - right_bottom_rect[:, 1].min()
+        text_rects, line_height = search_in_browser.locate_text(last_para)
+        left_top_rect = text_rects[0]
+        right_bottom_rect = text_rects[-1]
         next_line_left_top = (left_top_rect[:, 0].min(axis=0), right_bottom_rect[:, 1].max())
 
         button_right_bottom = next_line_left_top[0] + line_height * 10, next_line_left_top[1] + line_height * 2
@@ -229,12 +228,11 @@ class ChatGPT_Auto_Script:
     @focus_window
     def estimate_resubmit_button_reigon(self):
         last_response = self.copy_last_response()
-        left_top_text = last_response[:10]
-
+        left_top_text = [e for e in last_response.split("\n") if e.strip()][0]
         left_top_text = left_top_text.replace('`', '')
 
-        left_top_rect = search_in_browser.locate_text(left_top_text)
-        line_height = left_top_rect[:, 1].max() - left_top_rect[:, 1].min()
+        text_rects, line_height = search_in_browser.locate_text(left_top_text)
+        left_top_rect = text_rects[0]
         
         button_left_top = left_top_rect.min(axis=0) + np.array([-line_height, -line_height * 5])
 
@@ -269,8 +267,8 @@ class ChatGPT_Auto_Script:
         pyperclip.copy("u_hZ26nN:JC.3Dj")
         pyautogui.hotkey("ctrl", "a", "v")
 
-        text_rect = search_in_browser.locate_text("u_hZ26nN:JC.3Dj")
-        line_height = int(text_rect[:, 1].max() - text_rect[:, 1].min())
+        text_rects, line_height = search_in_browser.locate_text("u_hZ26nN:JC.3Dj")
+        text_rect = text_rects[0]
 
         button_left_top = int(text_rect[:, 0].max()), int(text_rect[:, 1].min())
         #button_right_bottom = windows_api.get_mouse_window_rect()[2] - line_height // 4, int(text_rect[:, 1].max())
@@ -312,5 +310,4 @@ chatgpt = ChatGPT_Auto_Script()
 time.sleep(1)
 chatgpt.init()
 chatgpt.scroll_to_bottom()
-chatgpt.submit('hello')
 

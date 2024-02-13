@@ -107,10 +107,57 @@ def find_optimal_highlight_rect(img_before, img_after, width_height_ratio=None, 
 
     return box
 
+def find_all_highlight_rect(img_before, img_after, width_height_ratio=None, vis=False):
+    img_before, img_after = np.asarray(img_before), np.asarray(img_after)
+    
+    # 寻找差异区域的轮廓
+    contours = find_contours(img_before, img_after)
+    
+    if vis:
+        img_vis = img_after.copy()
+
+    valid_rects = []
+
+    for contour in contours:
+        rect = cv2.minAreaRect(contour)  # 获取最小外接矩形
+        width, height = max(rect[1]), min(rect[1])
+
+        if rect[2] % 90 != 0:
+            continue
+
+        if not (width >= 5 and 400 >= height >= 5):
+            continue
+
+        if cv2.contourArea(contour) == 0 or width * height / cv2.contourArea(contour) > 1.1:
+            continue
+
+        valid_rects.append(rect)
+
+        if vis:
+            cv2.drawContours(img_vis, [contour], 0, (0, 255, 0), 2)    
+    
+    if vis:
+        if not valid_rects:
+            for contour in contours:
+                cv2.drawContours(img_vis, [contour], 0, (0, 255, 0), 2)    
+        cv2.imshow('Changes', img_vis)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    if not valid_rects:
+        return None
+
+    boxes = []
+    for rect in valid_rects:
+        box = cv2.boxPoints(rect)
+        boxes.append(np.int0(box))
+
+    return boxes
+
 
 if __name__ == '__main__':
     img_before = cv2.imread('img_before.png')
     img_after = cv2.imread('img_after.png')
     
-    boxes = find_optimal_highlight_rect(img_before, img_after, width_height_ratio=10, vis=True)
+    boxes = find_all_highlight_rect(img_before, img_after, width_height_ratio=10, vis=True)
     print(len(boxes))
