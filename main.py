@@ -4,6 +4,8 @@ import pyautogui
 import pyperclip
 import time
 import re
+import random
+import string
 from PIL import Image
 import numpy as np
 
@@ -108,6 +110,22 @@ class ChatGPT_Auto_Script:
 
         pyautogui.moveTo(cursor_pos)
     
+    def init_resubmit_button(self):
+        if os.path.exists(self.resubmit_button_path):
+            self.resubmit_button_image = Image.open(self.resubmit_button_path)
+        else:
+            pyautogui.alert(
+                text='点击ok后，程序将自动检测resubmit按钮图片。', 
+                title='初始化ChatGPT自动脚本', 
+                button='ok')
+            
+            while (response := self.copy_last_response()) is None:
+                pyautogui.alert(
+                    text='请展示有对话内容的网页，以便程序检测resubmit按钮位置。', 
+                    title='初始化ChatGPT自动脚本', 
+                    button='确认')
+            _, self.resubmit_button_image = self.locate_resubmit_button(response)
+    
     def screenshot(self, filepath=None, region=None):
         if region is None:
             left, top, right, bottom = self.window_rect
@@ -147,23 +165,49 @@ class ChatGPT_Auto_Script:
         if wait_start:
             wait_finish = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=10)
             if wait_finish:
-                return self.copy_last_response()
+                response = self.copy_last_response()
+                if response is not None:
+                    return response
+                else:
+                    pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='复制快捷键未起效！', button='OK')
             else:
-                pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT回复超时', button='OK')
+                pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT回复超时！', button='OK')
         else:
-            pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT未响应', button='OK')
+            pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT未响应！', button='OK')
 
-        initial_clipboard_content = pyperclip.paste()
-        new_clipboard_content = initial_clipboard_content
-        while new_clipboard_content == initial_clipboard_content:
+        return self.wait_for_clip_copy()
+    
+    def wait_for_clip_copy(self):
+        clip_state = pyperclip.paste()
+        initial_clipboard_content = self.generate_password()
+        pyperclip.copy(initial_clipboard_content)
+        while pyperclip.paste() == initial_clipboard_content:
             time.sleep(0.1)
-            new_clipboard_content = pyperclip.paste()
+        new_clipboard_content = pyperclip.paste()
+        pyperclip.copy(clip_state)
         return new_clipboard_content
+    
+    def generate_password(self, length=12):
+        # 定义密码字符池
+        characters = string.ascii_letters + string.digits + "!@#$%^&*()"
+        # 随机选择字符生成密码
+        password = ''.join(random.choice(characters) for i in range(length))
+        return password
     
     @focus_window
     def copy_last_response(self):
+        clip_state = pyperclip.paste()
+        initial_clipboard_content = self.generate_password()
+        pyperclip.copy(initial_clipboard_content)
+        
         pyautogui.hotkey("ctrl", "shift", "c")
-        return pyperclip.paste()
+
+        if pyperclip.paste() == initial_clipboard_content:
+            return None
+
+        new_clipboard_content = pyperclip.paste()
+        pyperclip.copy(clip_state)
+        return new_clipboard_content
 
     @focus_window
     def submit(self, prompt):
@@ -198,7 +242,12 @@ class ChatGPT_Auto_Script:
 
     @focus_window
     def resubmit(self, prompt):
-        button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon()
+        if not hasattr(self, "resubmit_button_image"):
+            self.init_resubmit_button()
+
+        response = self.copy_last_response()
+        
+        button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon(response)
 
         pyautogui.moveTo(button_left_top[0], button_left_top[1])
 
@@ -327,9 +376,8 @@ class ChatGPT_Auto_Script:
         return self.pad_image_region(button_boundary_list[0]), image
     
     @focus_window
-    def estimate_resubmit_button_reigon(self):
-        last_response = self.copy_last_response()
-        left_top_text = [e for e in last_response.split("\n") if e.strip()][0]
+    def estimate_resubmit_button_reigon(self, response):
+        left_top_text = [e for e in response.split("\n") if e.strip()][0]
         left_top_text = left_top_text.replace('`', '')
 
         text_rects, line_height = search_in_browser.locate_text(left_top_text)
@@ -351,8 +399,8 @@ class ChatGPT_Auto_Script:
         return button_left_top.tolist(), button_right_bottom.tolist(), int(line_height)
 
     @focus_window
-    def locate_resubmit_button(self):
-        button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon()
+    def locate_resubmit_button(self, response):
+        button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon(response)
 
         button_boundary_list = cursor.detect_button_boundary(
             button_left_top, 
@@ -374,10 +422,11 @@ class ChatGPT_Auto_Script:
     def locate_submit_button(self):
         self._focus_chat_input()
         
-        pyperclip.copy("u_hZ26nN:JC.3Dj")
+        random_string = self.generate_password()
+        pyperclip.copy(random_string)
         pyautogui.hotkey("ctrl", "a", "v")
 
-        text_rects, line_height = search_in_browser.locate_text("u_hZ26nN:JC.3Dj")
+        text_rects, line_height = search_in_browser.locate_text(random_string)
         text_rect = text_rects[0]
 
         button_left_top = int(text_rect[:, 0].max()), int(text_rect[:, 1].min())
@@ -417,4 +466,6 @@ class ChatGPT_Auto_Script:
 # for file in os.listdir("detected_images"):
 #     os.remove(os.path.join("detected_images", file))
 chatgpt = ChatGPT_Auto_Script()
+chatgpt.init_submit_button()
+chatgpt.test()
 chatgpt.demo()
