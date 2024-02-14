@@ -89,7 +89,7 @@ class ChatGPT_Auto_Script:
 
         pyautogui.moveTo(cursor_pos)
     
-    def screenshot(self):
+    def screenshot(self, filepath=None):
         left, top, right, bottom = self.window_rect        
         region = (left, top, right - left, bottom - top)
         region = self.pad_image_region(region, pad=-50)
