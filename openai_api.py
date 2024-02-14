@@ -17,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 
+from chatgpt_chat_script import ChatGPTChatScript, ChatMessage
+
 class BasicAuthMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, username: str, password: str):
@@ -69,13 +71,6 @@ class ModelList(BaseModel):
     object: str = 'list'
     data: List[ModelCard] = []
 
-
-class ChatMessage(BaseModel):
-    role: Literal['user', 'assistant', 'system', 'function']
-    content: Optional[str]
-    function_call: Optional[Dict] = None
-
-
 class DeltaMessage(BaseModel):
     role: Optional[Literal['user', 'assistant', 'system']] = None
     content: Optional[str] = None
@@ -113,9 +108,10 @@ class ChatCompletionResponse(BaseModel):
     created: Optional[int] = Field(default_factory=lambda: int(time.time()))
 
 
+chat_script = ChatGPTChatScript()
+
 @app.get('/v1/models', response_model=ModelList)
 async def list_models():
-    global model_args
     model_card = ModelCard(id='gpt-3.5-turbo')
     return ModelList(data=[model_card])
 
@@ -124,11 +120,11 @@ async def list_models():
 async def create_chat_completion(request: ChatCompletionRequest):
     chat_messages = request.messages
 
-    response = "You say: " + chat_messages[-1].content + '?'
+    response_msg = chat_script.auto_chat(chat_messages)
 
     choice_data = ChatCompletionResponseChoice(
         index=0,
-        message=ChatMessage(role='assistant', content=response),
+        message=response_msg,
         finish_reason='stop',
     )
     return ChatCompletionResponse(model=request.model,

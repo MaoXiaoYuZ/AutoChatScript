@@ -1,3 +1,5 @@
+# ChatGPT网页的自动化脚本，只实现自动化操作，不存储任何数据
+
 import functools
 import os
 import pyautogui
@@ -40,7 +42,7 @@ def focus_window(func):
     return wrapper
 
 
-class ChatGPT_Auto_Script:
+class ChatGPTAutoScript:
     def __init__(self):
         self.retry_button_path = "detected_images/retry_button.png"
         self.submit_button_path = "detected_images/submit_button.png"
@@ -163,7 +165,7 @@ class ChatGPT_Auto_Script:
         wait_start = self.wait_image_disappear(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=10)
         
         if wait_start:
-            wait_finish = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=10)
+            wait_finish = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=30)
             if wait_finish:
                 response = self.copy_last_response()
                 if response is not None:
@@ -241,11 +243,12 @@ class ChatGPT_Auto_Script:
         pyautogui.scroll(clicks)
 
     @focus_window
-    def resubmit(self, prompt):
+    def resubmit(self, prompt, response=None):
         if not hasattr(self, "resubmit_button_image"):
             self.init_resubmit_button()
 
-        response = self.copy_last_response()
+        if response is None:
+            response = self.copy_last_response()
         
         button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon(response)
 
@@ -465,7 +468,8 @@ class ChatGPT_Auto_Script:
 #remove all file in detected_images
 # for file in os.listdir("detected_images"):
 #     os.remove(os.path.join("detected_images", file))
-chatgpt = ChatGPT_Auto_Script()
-chatgpt.init_submit_button()
-chatgpt.test()
-chatgpt.demo()
+if __name__ == "__main__":
+    chatgpt = ChatGPTAutoScript()
+    chatgpt.init_submit_button()
+    chatgpt.test()
+    chatgpt.demo()

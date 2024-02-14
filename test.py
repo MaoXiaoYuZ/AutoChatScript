@@ -1,13 +1,40 @@
 import requests
+import ssl
+import certifi
 
-# 替换以下 URL 为你的服务地址
-url = 'http://localhost:8000/v1/models'
+MODEL = "chatgpt-3.5-turbo"
+OPENAI_SECRET_KEY = "none"
+# Assuming MODEL and OPENAI_SECRET_KEY are defined earlier in your code.
 
-try:
-    response = requests.get(url)
-    # 打印响应的状态码和内容
-    print('Status Code:', response.status_code)
-    print('Response Body:', response.text)
-except requests.exceptions.RequestException as e:
-    # 处理请求过程中的错误
-    print('Error:', e)
+def chat_with_chatgpt(prompt: str):
+    payload = {
+        'model': MODEL,
+        'messages': [
+            {"role": "user", "content": prompt}
+        ]
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {OPENAI_SECRET_KEY}"
+    }
+    url = 'http://127.0.0.1:8000/v1/chat/completions'
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, verify=certifi.where())
+        
+        # Check if the request was successful
+        if response.status_code == 200:
+            response_data = response.json()
+            if "error" in response_data:
+                print(f"OpenAI request failed with error {response_data['error']}")
+                return None
+            return response_data['choices'][0]['message']['content']
+        else:
+            print(f"Request failed with status code {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"Request failed: {e}")
+        return None
+
+response = chat_with_chatgpt('what can you do for me ?')
+print(response)
