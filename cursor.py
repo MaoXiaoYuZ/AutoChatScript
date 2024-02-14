@@ -111,7 +111,7 @@ def detect_cur_button_boundary(start_pos, left_top, right_bottom, step=20):
     top = bounds.get('up', start_pos)[1]
     bottom = bounds.get('down', start_pos)[1]
 
-    return (int(left), int(top)), (int(right), int(bottom))
+    return int(left), int(top), int(right), int(bottom)
 
 @modify_pyautogui_settings
 def detect_button_boundary(left_top, right_bottom, step=20, sub_step=5, only_first=False):
@@ -130,18 +130,17 @@ def detect_button_boundary(left_top, right_bottom, step=20, sub_step=5, only_fir
             pyautogui.moveTo(x, y)
 
             if get_cursor_state() == "HAND":
-                rect_start, rect_end = detect_cur_button_boundary((x, y), left_top, right_bottom, step=sub_step)
-                boundary = (*rect_start, *rect_end)
+                boundary = left, top, right, bottom = detect_cur_button_boundary((x, y), left_top, right_bottom, step=sub_step)
                 if only_first:
                     return [boundary, ]
 
                 assert boundary not in all_boundaries
                 all_boundaries.append(boundary)
 
-                for by in range(rect_start[1], rect_end[1] + 1, step):
-                    for bx in range(rect_start[0], rect_end[0] + 1, step):
-                        idx_visited_x = (bx - left_top[0]) // step
-                        idx_visited_y = (by - left_top[1]) // step
+                for by in range(top, bottom + 1, step):
+                    for bx in range(left, right + 1, step):
+                        idx_visited_x = (bx - left) // step
+                        idx_visited_y = (by - top) // step
                         visited[idx_visited_y, idx_visited_x] = True
     return all_boundaries
 

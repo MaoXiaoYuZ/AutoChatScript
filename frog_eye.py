@@ -3,7 +3,7 @@ import pyautogui
 
 import numpy as np
 
-def is_stationary(frame1, frame2, threshold=30, change_ratio_threshold=0.01):
+def is_stationary(frame1, frame2, threshold=30, change_ratio_threshold=0.01, ret_change_ratio=None, ):
     frame1, frame2 = np.asarray(frame1), np.asarray(frame2)
 
     # 将图片转换为灰度图，以简化计算
@@ -24,6 +24,8 @@ def is_stationary(frame1, frame2, threshold=30, change_ratio_threshold=0.01):
     change_ratio = non_zero_count / total_pixels
 
     #print("change_ratio", change_ratio)
+    if ret_change_ratio is not None:
+        ret_change_ratio.append(change_ratio)
 
     return change_ratio < change_ratio_threshold
 
