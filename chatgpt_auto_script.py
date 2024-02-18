@@ -19,35 +19,34 @@ import windows_api
 from pynput.mouse import Listener
 
 
-def focus_window(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # 假设第一个参数是调用该方法的类实例
-        self = args[0]
-        cursor_pos = pyautogui.position()
-        flag = False
-        if not self._on_focus:
-            pyautogui.click(self.window_rect[0] + 10, self.window_rect[1] + 10)
-            self._on_focus = True
-            flag = True
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            raise e
-        finally:
-            if flag:
-                pyautogui.moveTo(cursor_pos)
-                self._on_focus = False
-            
-    return wrapper
-
-
 class ChatGPTAutoScript:
     def __init__(self):
         self.retry_button_path = "detected_images/retry_button.png"
         self.submit_button_path = "detected_images/submit_button.png"
         self.resubmit_button_path = "detected_images/resubmit_button.png"
         self._on_focus = False
+
+    def focus_window(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # 假设第一个参数是调用该方法的类实例
+            self = args[0]
+            cursor_pos = pyautogui.position()
+            flag = False
+            if not self._on_focus:
+                self._focus_window()
+                self._on_focus = True
+                flag = True
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                raise e
+            finally:
+                if flag:
+                    pyautogui.moveTo(cursor_pos)
+                    self._on_focus = False
+                
+        return wrapper
 
     def init_window_rect(self):
         self.window_rect = windows_api.get_mouse_window_rect()
@@ -148,7 +147,10 @@ class ChatGPTAutoScript:
 
         return pyautogui.locateCenterOnScreen(image, region=region, confidence=confidence)
     
-    @focus_window
+    def _focus_window(self):
+        left, top, right, bottom = self.submit_button_region
+        pyautogui.click(left, (top + bottom) // 2)
+
     def _focus_chat_input(self):
         pyautogui.hotkey("shift", "esc")
 
@@ -211,19 +213,21 @@ class ChatGPTAutoScript:
         pyperclip.copy(clip_state)
         return new_clipboard_content
 
-    @focus_window
     def submit(self, prompt):
+        cursor_pos = pyautogui.position()
+        self._focus_window()
         self._focus_chat_input()
         pyperclip.copy(prompt)
         pyautogui.hotkey("ctrl", "a", "v")
+        pyautogui.moveTo(cursor_pos)
 
         pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
         if pos is None:
-            #self.submit_button_region, self.submit_button_image = self.locate_submit_button()
             raise Exception("未能定位到submit按钮！(Failed to locate the submit button!)")
-            return
         else:
+            cursor_pos = pyautogui.position()
             pyautogui.click(pos)
+            pyautogui.moveTo(cursor_pos)
         
         try:
             response = self._wait_last_response()
@@ -242,7 +246,6 @@ class ChatGPTAutoScript:
         pyautogui.moveTo(pos)
         pyautogui.scroll(clicks)
 
-    @focus_window
     def resubmit(self, prompt, response=None):
         if not hasattr(self, "resubmit_button_image"):
             self.init_resubmit_button()
@@ -252,20 +255,20 @@ class ChatGPTAutoScript:
         
         button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon(response)
 
+        cursor_pos = pyautogui.position()
         pyautogui.moveTo(button_left_top[0], button_left_top[1])
-
-        pos = self.wait_image(self.resubmit_button_image, region=(*button_left_top, *button_right_bottom), confidence=0.9, timeout=0)
+        pos = self.wait_image(self.resubmit_button_image, region=(*button_left_top, self.window_rect[2], button_right_bottom[1]), confidence=0.9, timeout=0)
         
         if pos is None:
             #self.resubmit_button_region, self.resubmit_button_image = self.locate_resubmit_button()
             raise Exception("未能定位到resubmit按钮！(Failed to locate the resubmit button!)")
-            return
         else:
             pyautogui.click(pos)
         
-        pyperclip.copy(prompt)
-        pyautogui.hotkey("ctrl", "a", "v")
-        pyautogui.hotkey("tab", "enter")
+            pyperclip.copy(prompt)
+            pyautogui.hotkey("ctrl", "a", "v")
+            pyautogui.hotkey("tab", "enter")
+            pyautogui.moveTo(cursor_pos)
 
         try:
             response = self._wait_last_response()
@@ -273,12 +276,6 @@ class ChatGPTAutoScript:
             print(e)
         
         return response
-
-    @focus_window
-    def regenerate(self):
-        self._focus_chat_input()
-        pyautogui.hotkey("shift", "tab", "tab")
-        pyautogui.press("enter")
 
     def wait_image(self, image, region=None, confidence=1, timeout=10, debug=True):
         t0 = time.time()
@@ -421,7 +418,6 @@ class ChatGPTAutoScript:
 
         return self.pad_image_region(button_boundary_list[0]), image
 
-    @focus_window    
     def locate_submit_button(self):
         self._focus_chat_input()
         

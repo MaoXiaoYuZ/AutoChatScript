@@ -36,5 +36,5 @@ def chat_with_chatgpt(prompt: str):
         print(f"Request failed: {e}")
         return None
 
-response = chat_with_chatgpt('what can you do for me ?')
+response = chat_with_chatgpt('what can you do for me')
 print(response)

@@ -73,13 +73,12 @@ class ChatGPTChatScript:
             else:
                 if len(chat.messages) == len(messages) - 1:
                     action = 'submit'
-
                 else:
                     action = 'resubmit'
         
         # check
         if action != 'new' and chat.messages[-1].content != self.auto_script.copy_last_response():
-            raise Exception('Current chat is not consistent with last response') 
+            print('[WARN]Current chat is not consistent with last response') 
 
         if action == 'new':
             response = self.auto_script.submit(messages[-1].content)
