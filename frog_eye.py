@@ -1,3 +1,5 @@
+import colorsys
+import random
 import cv2
 import pyautogui
 
@@ -50,6 +52,16 @@ def point_in_contour(point, contour):
     dist = cv2.pointPolygonTest(contour, point, False)
 
     return dist >= 0
+
+def random_color():
+    h = random.random()  # 随机色相值
+    s = random.uniform(0.5, 1.0)  # 随机饱和度值
+    v = random.uniform(0.5, 1.0)  # 随机亮度值
+
+    s, v = 1, 1
+
+    return tuple(round(i * 255) for i in colorsys.hsv_to_rgb(h, s, v))
+
 
 def vis_contours(img, contours, delay=0):
     img_vis = np.asarray(img).copy()
@@ -130,10 +142,10 @@ def find_all_highlight_rect(img_before, img_after, width_height_ratio=None, vis=
         rect = cv2.minAreaRect(contour)  # 获取最小外接矩形
         width, height = max(rect[1]), min(rect[1])
 
-        if rect[2] % 90 != 0:
+        if not (width >= 5 and 400 >= height >= 5):
             continue
 
-        if not (width >= 5 and 400 >= height >= 5):
+        if rect[2] % 90 != 0:
             continue
 
         if cv2.contourArea(contour) == 0 or width * height / cv2.contourArea(contour) > 1.1:
@@ -142,12 +154,13 @@ def find_all_highlight_rect(img_before, img_after, width_height_ratio=None, vis=
         valid_rects.append(rect)
 
         if vis:
-            cv2.drawContours(img_vis, [contour], 0, (0, 255, 0), 2)    
+            # random a color using hsv
+            cv2.drawContours(img_vis, [contour], 0, random_color(), 2)    
     
     if vis:
         if not valid_rects:
             for contour in contours:
-                cv2.drawContours(img_vis, [contour], 0, (0, 255, 0), 2)    
+                cv2.drawContours(img_vis, [contour], 0, random_color(), 2)    
         cv2.imshow('Changes', img_vis)
         cv2.waitKey(0)
         cv2.destroyAllWindows()

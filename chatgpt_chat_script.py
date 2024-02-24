@@ -52,7 +52,12 @@ class ChatGPTChatScript:
             if len(messages) <= len(chat.messages) and all(len(msg.content) == len(chat_msg.content) and msg.content == chat_msg.content for msg, chat_msg in zip(messages, chat.messages)):
                 return chat
         return None
-
+    
+    def submit(self, prompt):
+        response = self.auto_script.submit(prompt)
+        response_msg = ChatMessage(role='assistant', content=response)
+        return response_msg
+    
     def auto_chat(self, messages:List[ChatMessage]):
         messages = messages.copy()
         # 像api一样接受messages输入，将自动判定该new/submit/resubmit chat
@@ -61,10 +66,6 @@ class ChatGPTChatScript:
         if len(messages) == 1:
             if (chat := self.find_chat(messages)) is None:
                 action = 'new'
-                self.auto_script.new_chat()
-                chat_id = str(int(time.time() * 1000))  # Use milliseconds for uniqueness
-                chat = Chat(chatid=chat_id, messages=messages)
-                self.chats.append(chat)
             else:
                 action = 'resubmit'
         else:
@@ -77,16 +78,24 @@ class ChatGPTChatScript:
                     action = 'resubmit'
         
         # check
-        if action != 'new' and chat.messages[-1].content != self.auto_script.copy_last_response():
-            print('[WARN]Current chat is not consistent with last response') 
+        # if action != 'new' and chat.messages[-1].content != self.auto_script.copy_last_response():
+        #     print('[WARN]Current chat is not consistent with last response') 
+        # 目前暂时不检测一致性
 
         if action == 'new':
+            self.auto_script.new_chat()
+            chat_id = str(int(time.time() * 1000))  # Use milliseconds for uniqueness
+            chat = Chat(chatid=chat_id, messages=messages)
+            
             response = self.auto_script.submit(messages[-1].content)
             response_msg = ChatMessage(role='assistant', content=response)
             chat.messages.append(response_msg)
+
+            self.chats.append(chat)
         elif action == 'submit':
             response = self.auto_script.submit(messages[-1].content)
             response_msg = ChatMessage(role='assistant', content=response)
+            chat.messages.append(messages[-1])
             chat.messages.append(response_msg)
         elif action == 'resubmit':
             response = self.auto_script.resubmit(messages[-1].content, chat.messages[len(messages)].content)

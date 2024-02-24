@@ -34,7 +34,7 @@ class ChatGPTAutoScript:
             cursor_pos = pyautogui.position()
             flag = False
             if not self._on_focus:
-                self._focus_window()
+                self._focus_chat_input()
                 self._on_focus = True
                 flag = True
             try:
@@ -111,6 +111,15 @@ class ChatGPTAutoScript:
 
         pyautogui.moveTo(cursor_pos)
     
+    def wait_submit_image(self):
+        pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
+        if pos is None:
+            self.init_submit_button()
+            pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
+            if pos is None:
+                raise Exception("未能定位到submit按钮！(Failed to locate the submit button!)")
+        return pos
+    
     def init_resubmit_button(self):
         if os.path.exists(self.resubmit_button_path):
             self.resubmit_button_image = Image.open(self.resubmit_button_path)
@@ -147,11 +156,13 @@ class ChatGPTAutoScript:
 
         return pyautogui.locateCenterOnScreen(image, region=region, confidence=confidence)
     
-    def _focus_window(self):
+    def _focus_chat_input(self):
+        pos = self.wait_submit_image()
         left, top, right, bottom = self.submit_button_region
         pyautogui.click(left, (top + bottom) // 2)
-
-    def _focus_chat_input(self):
+        return pos
+    
+    def _focus_chat_input_by_keyboard(self):
         pyautogui.hotkey("shift", "esc")
 
     @focus_window
@@ -163,17 +174,24 @@ class ChatGPTAutoScript:
         # wait_start = self.wait_stationary(delay=1, timeout=10, reverse=True)
         # wait_finish = self.wait_stationary(delay=1, timeout=10, reverse=False)
         time.sleep(0.5)     # 等待浏览器响应点击submit事件
-
-        wait_start = self.wait_image_disappear(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=10)
+        
+        wait_start = self.wait_image_disappear(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=30)
         
         if wait_start:
-            wait_finish = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=30)
+            wait_finish = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=120)
             if wait_finish:
                 response = self.copy_last_response()
-                if response is not None:
-                    return response
-                else:
+                if response is None:
                     pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='复制快捷键未起效！', button='OK')
+                else:
+                    continue_generating_button, _ = search_in_browser.locate_text("Continue generating")
+                    if continue_generating_button:
+                        cursor_pos = pyautogui.position()
+                        pyautogui.click(continue_generating_button[0].mean(axis=0).tolist())
+                        pyautogui.moveTo(cursor_pos)
+                        return self._wait_last_response()
+                    else:
+                        return response
             else:
                 pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT回复超时！', button='OK')
         else:
@@ -215,19 +233,13 @@ class ChatGPTAutoScript:
 
     def submit(self, prompt):
         cursor_pos = pyautogui.position()
-        self._focus_window()
-        self._focus_chat_input()
+        pos = self._focus_chat_input()
         pyperclip.copy(prompt)
         pyautogui.hotkey("ctrl", "a", "v")
-        pyautogui.moveTo(cursor_pos)
+        pyautogui.scroll(-1_000_000)
 
-        pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
-        if pos is None:
-            raise Exception("未能定位到submit按钮！(Failed to locate the submit button!)")
-        else:
-            cursor_pos = pyautogui.position()
-            pyautogui.click(pos)
-            pyautogui.moveTo(cursor_pos)
+        pyautogui.click(pos)
+        pyautogui.moveTo(cursor_pos)
         
         try:
             response = self._wait_last_response()
@@ -260,8 +272,11 @@ class ChatGPTAutoScript:
         pos = self.wait_image(self.resubmit_button_image, region=(*button_left_top, self.window_rect[2], button_right_bottom[1]), confidence=0.9, timeout=0)
         
         if pos is None:
-            #self.resubmit_button_region, self.resubmit_button_image = self.locate_resubmit_button()
-            raise Exception("未能定位到resubmit按钮！(Failed to locate the resubmit button!)")
+            if os.path.exists(self.resubmit_button_path):
+                os.remove(self.resubmit_button_path)
+            if hasattr(self, "resubmit_button_image"):
+                del self.resubmit_button_image
+            return self.resubmit(prompt, response)
         else:
             pyautogui.click(pos)
         
@@ -281,7 +296,7 @@ class ChatGPTAutoScript:
         t0 = time.time()
         while True:
             try:
-                if debug:self.screenshot(f"debug/wait_image/{t0}-{time.time()}.png", region=region)
+                if debug:self.screenshot(f"debug/wait_image/{t0:.0f}-{time.time()-t0:.3f}.png", region=region)
                 pos = self.locateCenterOnScreen(image, region=region, confidence=confidence)
                 return pos
             except Exception:
@@ -294,14 +309,14 @@ class ChatGPTAutoScript:
         pos = True
         while pos:
             try:
-                if debug:self.screenshot(f"debug/wait_image_disappear/{t0}-{time.time()}.png", region=region)
+                if debug:self.screenshot(f"debug/wait_image_disappear/{t0:.0f}-{time.time()-t0:.3f}.png", region=region)
                 pos = self.locateCenterOnScreen(image, region=region, confidence=confidence)
             except Exception:
                 return True
             if time.time() - t0 > timeout:
                 return False
             time.sleep(0.5 if debug else 0.1)
-    
+     
     def wait_stationary(self, delay=2, timeout=10, reverse=False, debug=True):
         t0 = time.time()
         img_before = self.screenshot()
@@ -377,7 +392,13 @@ class ChatGPTAutoScript:
     
     @focus_window
     def estimate_resubmit_button_reigon(self, response):
-        left_top_text = [e for e in response.split("\n") if e.strip()][0]
+        for left_top_text in response.split("\r\n"):
+            if left_top_text.startswith('```'):
+                continue
+            left_top_text = left_top_text.replace("`", "")
+            if len(left_top_text) < 7:
+                continue
+            break
         left_top_text = left_top_text.replace('`', '')
 
         text_rects, line_height = search_in_browser.locate_text(left_top_text)
@@ -393,7 +414,7 @@ class ChatGPTAutoScript:
             text_rects, line_height = search_in_browser.locate_text(left_top_text)
             left_top_rect = text_rects[0]
             
-            button_left_top = left_top_rect.min(axis=0) + np.array([-line_height, -line_height * 5])
+            button_left_top = left_top_rect.min(axis=0) + np.array([-line_height * 2, -line_height * 7])
             button_right_bottom = left_top_rect.max(axis=0)
 
         return button_left_top.tolist(), button_right_bottom.tolist(), int(line_height)
@@ -419,9 +440,10 @@ class ChatGPTAutoScript:
         return self.pad_image_region(button_boundary_list[0]), image
 
     def locate_submit_button(self):
-        self._focus_chat_input()
+        self._focus_chat_input_by_keyboard()
         
-        random_string = self.generate_password()
+        #random_string = self.generate_password()
+        random_string = "This Say a is Test!"
         pyperclip.copy(random_string)
         pyautogui.hotkey("ctrl", "a", "v")
 
@@ -466,6 +488,6 @@ class ChatGPTAutoScript:
 #     os.remove(os.path.join("detected_images", file))
 if __name__ == "__main__":
     chatgpt = ChatGPTAutoScript()
-    chatgpt.init_submit_button()
-    chatgpt.test()
+    #response = chatgpt.submit("你好")
+    #print(response)
     chatgpt.demo()

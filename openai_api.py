@@ -120,7 +120,8 @@ async def list_models():
 async def create_chat_completion(request: ChatCompletionRequest):
     chat_messages = request.messages
 
-    response_msg = chat_script.auto_chat(chat_messages)
+    #response_msg = chat_script.auto_chat(chat_messages)
+    response_msg = chat_script.submit(chat_messages[-1].content)
 
     choice_data = ChatCompletionResponseChoice(
         index=0,
