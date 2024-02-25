@@ -58,7 +58,7 @@ AutoChatScript是一个使用PyAutoGUI库实现的自动化脚本，旨在自动
 
 
     ```
-    python openai_api.py
+    python openai_api.py --server-port 8000
     ```
 
 ## 注意事项

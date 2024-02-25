@@ -57,7 +57,7 @@ Before running the script, make sure you have opened the web version of ChatGPT 
 2. **Provide OpenAI Format API**
 
    ```
-   python openai_api.py
+   python openai_api.py --server-port 8000
    ```
 
 ## Precautions

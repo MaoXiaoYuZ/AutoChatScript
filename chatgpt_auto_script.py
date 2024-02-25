@@ -185,13 +185,15 @@ class ChatGPTAutoScript:
                             pyautogui.click(continue_generating_button[0].mean(axis=0).tolist())
                             pyautogui.moveTo(cursor_pos)
                             return self._wait_last_response()
+                        else:
+                            return response
                     else:
                         return response
             else:
                 pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。\nPlease copy manually, the program will listen for the next copy action.', title='ChatGPT回复超时！(ChatGPT response timeout!)', button='OK')
         else:
             pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。\nPlease copy manually, the program will listen for the next copy action.', title='ChatGPT未响应！(ChatGPT is not responding!)', button='OK')
-
+        
         return self.wait_for_clip_copy()
     
     def wait_for_clip_copy(self):
