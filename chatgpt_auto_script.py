@@ -26,6 +26,8 @@ class ChatGPTAutoScript:
         self.resubmit_button_path = "detected_images/resubmit_button.png"
         self._on_focus = False
 
+        os.makedirs("detected_images", exist_ok=True)
+
     def focus_window(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
