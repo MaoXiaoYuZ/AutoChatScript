@@ -481,9 +481,7 @@ class ChatGPTAutoScript:
                 response = self.submit(prompt)
                 print("ChatGPT:", response)
 
-#remove all file in detected_images
-# for file in os.listdir("detected_images"):
-#     os.remove(os.path.join("detected_images", file))
+
 if __name__ == "__main__":
     chatgpt = ChatGPTAutoScript()
     #response = chatgpt.submit("你好")
