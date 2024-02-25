@@ -61,7 +61,6 @@ AutoChatScript是一个使用PyAutoGUI库实现的自动化脚本，旨在自动
     python openai_api.py
     ```
 
-
 ## 注意事项
 
 - 该项目目前仅支持 Windows 操作系统。

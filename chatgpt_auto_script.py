@@ -79,10 +79,7 @@ class ChatGPTAutoScript:
                 init_submit_button_flag = False
 
         if init_submit_button_flag:
-            pyautogui.alert(
-                text='程序将监听鼠标点击，请将鼠标移动到ChatGPT网页空白处，并点击一次。', 
-                title='初始化ChatGPT自动脚本', 
-                button='ok')
+            pyautogui.alert(text='程序将监听鼠标点击，请将鼠标移动到ChatGPT网页空白处，并点击一次。\nThe program will listen for mouse clicks, please move the mouse to a blank area of the ChatGPT webpage and click once.', title='初始化自动脚本 (Initialize AutoChatScript)', button='ok')
             
             # 定义点击事件处理函数
             def on_click(x, y, button, pressed):
@@ -124,16 +121,11 @@ class ChatGPTAutoScript:
         if os.path.exists(self.resubmit_button_path):
             self.resubmit_button_image = Image.open(self.resubmit_button_path)
         else:
-            pyautogui.alert(
-                text='点击ok后，程序将自动检测resubmit按钮图片。', 
-                title='初始化ChatGPT自动脚本', 
-                button='ok')
+            pyautogui.alert(text='点击ok后，程序将自动检测修改按钮图片。\nAfter clicking ok, the program will automatically detect the resubmit button image.', title='初始化自动脚本 (Initialize AutoChatScript)', button='ok')
             
             while (response := self.copy_last_response()) is None:
-                pyautogui.alert(
-                    text='请展示有对话内容的网页，以便程序检测resubmit按钮位置。', 
-                    title='初始化ChatGPT自动脚本', 
-                    button='确认')
+                pyautogui.alert(text='请展示有对话内容的网页，以便程序检测修改按钮位置。\nPlease display a webpage with dialogue content so the program can detect the position of the resubmit button.', title='初始化自动脚本 (Initialize AutoChatScript)', button='ok')
+
             _, self.resubmit_button_image = self.locate_resubmit_button(response)
     
     def screenshot(self, filepath=None, region=None):
@@ -182,20 +174,21 @@ class ChatGPTAutoScript:
             if wait_finish:
                 response = self.copy_last_response()
                 if response is None:
-                    pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='复制快捷键未起效！', button='OK')
+                    pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。\nPlease copy manually, the program will listen for the next copy action.', title='复制快捷键未起效！(Copy shortcut key is not effective!)', button='OK')
                 else:
-                    continue_generating_button, _ = search_in_browser.locate_text("Continue generating")
-                    if continue_generating_button:
-                        cursor_pos = pyautogui.position()
-                        pyautogui.click(continue_generating_button[0].mean(axis=0).tolist())
-                        pyautogui.moveTo(cursor_pos)
-                        return self._wait_last_response()
+                    if len(response) > 500:
+                        continue_generating_button, _ = search_in_browser.locate_text("Continue generating")
+                        if continue_generating_button:
+                            cursor_pos = pyautogui.position()
+                            pyautogui.click(continue_generating_button[0].mean(axis=0).tolist())
+                            pyautogui.moveTo(cursor_pos)
+                            return self._wait_last_response()
                     else:
                         return response
             else:
-                pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT回复超时！', button='OK')
+                pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。\nPlease copy manually, the program will listen for the next copy action.', title='ChatGPT回复超时！(ChatGPT response timeout!)', button='OK')
         else:
-            pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。', title='ChatGPT未响应！', button='OK')
+            pyautogui.alert(text='请手动复制，程序将监听下一次的复制内容。\nPlease copy manually, the program will listen for the next copy action.', title='ChatGPT未响应！(ChatGPT is not responding!)', button='OK')
 
         return self.wait_for_clip_copy()
     
@@ -273,7 +266,7 @@ class ChatGPTAutoScript:
         button_left_top, button_right_bottom, line_height = self.estimate_resubmit_button_reigon(response)
 
         cursor_pos = pyautogui.position()
-        pyautogui.moveTo(button_left_top[0], button_left_top[1])
+        pyautogui.moveTo(button_left_top[0] + line_height, button_left_top[1] + line_height)
         pos = self.wait_image(self.resubmit_button_image, region=(*button_left_top, self.window_rect[2], button_right_bottom[1]), confidence=0.9, timeout=0)
         
         if pos is None:
