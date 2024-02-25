@@ -111,11 +111,11 @@ class ChatGPTAutoScript:
 
         pyautogui.moveTo(cursor_pos)
     
-    def wait_submit_image(self):
+    def wait_submit_image(self, timeout=0):
         pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
         if pos is None:
             self.init_submit_button()
-            pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
+            pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=timeout)
             if pos is None:
                 raise Exception("未能定位到submit按钮！(Failed to locate the submit button!)")
         return pos
@@ -232,12 +232,17 @@ class ChatGPTAutoScript:
         return new_clipboard_content
 
     def submit(self, prompt):
+        debug = False
+        if debug:
+            return debug
+
         cursor_pos = pyautogui.position()
         pos = self._focus_chat_input()
         pyperclip.copy(prompt)
         pyautogui.hotkey("ctrl", "a", "v")
         pyautogui.scroll(-1_000_000)
 
+        pos = self.wait_submit_image(timeout=0.5)   # 浏览器需要时间响应粘贴和滚动事件
         pyautogui.click(pos)
         pyautogui.moveTo(cursor_pos)
         
@@ -292,7 +297,7 @@ class ChatGPTAutoScript:
         
         return response
 
-    def wait_image(self, image, region=None, confidence=1, timeout=10, debug=True):
+    def wait_image(self, image, region=None, confidence=1, timeout=10, debug=False):
         t0 = time.time()
         while True:
             try:
@@ -304,7 +309,7 @@ class ChatGPTAutoScript:
                     return None
                 time.sleep(0.5 if debug else 0.1)
     
-    def wait_image_disappear(self, image, region=None, confidence=1, timeout=10, debug=True):
+    def wait_image_disappear(self, image, region=None, confidence=1, timeout=10, debug=False):
         t0 = time.time()
         pos = True
         while pos:
@@ -317,7 +322,7 @@ class ChatGPTAutoScript:
                 return False
             time.sleep(0.5 if debug else 0.1)
      
-    def wait_stationary(self, delay=2, timeout=10, reverse=False, debug=True):
+    def wait_stationary(self, delay=2, timeout=10, reverse=False, debug=False):
         t0 = time.time()
         img_before = self.screenshot()
         cur_delay = delay
