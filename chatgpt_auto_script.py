@@ -70,8 +70,9 @@ class ChatGPTAutoScript:
         cursor_pos = pyautogui.position()
 
         init_submit_button_flag = True
-        if os.path.exists(self.submit_button_path):
-            self.submit_button_image = Image.open(self.submit_button_path)
+        if os.path.exists(self.submit_button_path) or hasattr(self, "submit_button_image"):
+            if not hasattr(self, "submit_button_image"):
+                self.submit_button_image = Image.open(self.submit_button_path)
             if (region := self.locate_image(self.submit_button_image, confidence=0.9)):
                 self.submit_button_region = self.pad_image_region(region)
                 cursor_pos = pyautogui.position()
@@ -111,12 +112,15 @@ class ChatGPTAutoScript:
         pyautogui.moveTo(cursor_pos)
     
     def wait_submit_image(self, timeout=0):
-        pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=0)
+        print('waiting submit button...')
+        pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=timeout)
         if pos is None:
+            print('submit button not found, reinitializing...')
             self.init_submit_button()
             pos = self.wait_image(self.submit_button_image, region=self.submit_button_region, confidence=0.9, timeout=timeout)
             if pos is None:
                 raise Exception("未能定位到submit按钮！(Failed to locate the submit button!)")
+        print('submit button found!')
         return pos
     
     def init_resubmit_button(self):
