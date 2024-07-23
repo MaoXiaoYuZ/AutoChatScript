@@ -1,6 +1,6 @@
 # AutoChatScript
 
-[English](readme.md) | [中文](readme_cn.md)
+[English](readme.md) | [中文](readme_cn.md) | [日本語](readme_jp.md)
 
 AutoChatScript是一个使用PyAutoGUI库实现的自动化脚本，旨在自动化与ChatGPT网页的对话。该项目完全依靠读取和使用鼠标，键盘，屏幕，不逆向任何网页请求，也不需要安装浏览器插件。
 

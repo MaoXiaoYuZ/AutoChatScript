@@ -1,6 +1,6 @@
 # AutoChatScript
 
-[English](readme.md) | [中文](readme_cn.md)
+[English](readme.md) | [中文](readme_cn.md) | [日本語](readme_jp.md)
 
 AutoChatScript is an automation script implemented using the PyAutoGUI library, aimed at automating chat with ChatGPT(website). This project relies entirely on reading and using the mouse, keyboard, and screen without reverse-engineering any web requests or needing to install browser plugins.
 
